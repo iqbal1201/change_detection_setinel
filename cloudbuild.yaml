@@ -54,12 +54,15 @@ steps:
       - --platform=managed
       - --allow-unauthenticated
       - --service-account=${_RUN_SA}
-      - --memory=4Gi
-      - --cpu=2
+      - --memory=16Gi
+      - --cpu=4
+      - --gpu=1
+      - --gpu-type=nvidia-l4
+      - --no-cpu-throttling
       - --timeout=900          # 15 min — deep methods (DINOv2/SAM2) can be slow
       - --concurrency=1        # 1 job per instance (in-memory job dict)
       - --min-instances=0      # scale to zero when idle
-      - --max-instances=5
+      - --max-instances=3
       # Secrets are mounted as env vars at runtime (created by setup.sh)
       - --set-secrets=OPENAI_API_KEY=OPENAI_API_KEY:latest
 
