@@ -1,0 +1,29 @@
+Backend: rule_based
+Source method: method_01_index
+============================================================
+
+[Rule-based description — no VLM available]
+Source method: method_01_index
+
+1. CHANGE TYPE:
+   reflectance decreased across all visible bands — consistent with water-body expansion, flooding, or deep-shadow increase
+
+2. SPATIAL EXTENT:
+   7.7% of the scene (204,574 / 2,671,781 pixels) is flagged as changed.
+
+3. CHANGE PATTERN:
+   3819 spatially distinct changed region(s) detected.
+   Pattern is fragmented — the largest cluster accounts for 3% of all
+   changed area.  Changes are concentrated in the central portion of the scene.
+
+4. LIKELY CAUSE:
+   Based on visible-band spectral signatures only:
+   Reflectance decreased across all visible bands — consistent with water-body expansion, flooding, or deep-shadow increase
+   A definitive attribution requires NIR/SWIR bands or contextual ground truth.
+
+5. CONFIDENCE:
+   LOW — this description is derived purely from pixel statistics and simple
+   spectral heuristics, without a trained language or vision model.  It should
+   be treated as a first-pass screening aid, not an authoritative interpretation.
+   Spectral change in changed pixels: ΔBlue=-0.026, ΔGreen=-0.032, ΔRed=-0.041.
+Spectral interpretation: reflectance decreased across all visible bands — consistent with water-body expansion, flooding, or deep-shadow increase.

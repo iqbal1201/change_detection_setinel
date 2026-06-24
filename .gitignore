@@ -6,19 +6,17 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 
-# Large data / model files
-data/processed/
-outputs/
-checkpoints/
-*.tif
-*.gpkg
+# Raw input data (large; provided by the competition, not committed)
+data/sentinel2_*/
+data/**/*.aux.xml
+data/**/*.ovr
 
-# Visualizations (regenerable)
-visualizations/
+# Model weights (downloaded on demand)
+checkpoints/
+
+# OS / editor
+.DS_Store
+Thumbs.db
 
 # Jupyter
 .ipynb_checkpoints/
-
-# OS
-.DS_Store
-Thumbs.db
