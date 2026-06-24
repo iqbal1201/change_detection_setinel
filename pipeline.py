@@ -43,7 +43,9 @@ PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 from utils.data_loader import run_part1
 from utils.normalizer import local_normalize
 from utils.vectorizer import raster_to_polygons, save_raster
-from utils.storage import save_to_geopackage, list_layers
+from utils.storage import (
+    save_to_geopackage, save_to_sqlite, query_change_features, list_layers,
+)
 from utils.visualizer import (
     plot_method_result,
     build_folium_map,
@@ -98,6 +100,9 @@ def _save_outputs(
 
     # GeoPackage
     save_to_geopackage(gdf, layer_name)
+
+    # SQLite — change_features table (id, date_before, date_after, area_m2, confidence, geometry)
+    save_to_sqlite(gdf)
 
     # Matplotlib figure
     plot_method_result(img1, img2, prob, binary, name, gdf=gdf, profile=profile)
@@ -160,6 +165,15 @@ def main(
             continue
         prob, binary = _run_method(name, fn, img1, img2, profile)
         stats = _save_outputs(name, layer, prob, binary, img1, img2, profile)
+
+        # Part 2 required output: canonical change_map.tif / change_binary.tif
+        # Use Method 1 (primary) as the definitive output per the spec.
+        if method_id == 1:
+            save_raster(prob,   profile, PROCESSED_DIR / "change_map.tif")
+            save_raster(binary, profile, PROCESSED_DIR / "change_binary.tif",
+                        dtype="uint8", nodata=255)
+            print("  [Part 2] Saved canonical: change_map.tif, change_binary.tif")
+
         results[layer] = stats
         all_gdfs[layer] = stats["gdf"]
 
@@ -282,6 +296,42 @@ def main(
         except Exception:
             print("  VLM description failed:")
             traceback.print_exc()
+
+    # ── Part 3 — SQLite query demonstration ──────────────────────────────────
+    print("\n" + "="*60)
+    print("  PART 3 — SQLite Query Examples (outputs/change_features.db)")
+    print("="*60)
+
+    queries = [
+        (
+            "Top 10 largest change polygons",
+            "SELECT id, date_before, date_after, "
+            "ROUND(area_m2,1) AS area_m2, ROUND(confidence,4) AS confidence "
+            "FROM change_features ORDER BY area_m2 DESC LIMIT 10",
+        ),
+        (
+            "Summary statistics by date pair",
+            "SELECT date_before, date_after, "
+            "COUNT(*) AS n_polygons, "
+            "ROUND(SUM(area_m2)/1e6,4) AS total_area_km2, "
+            "ROUND(AVG(confidence),4) AS mean_confidence "
+            "FROM change_features GROUP BY date_before, date_after",
+        ),
+        (
+            "High-confidence polygons (confidence > 0.6)",
+            "SELECT id, ROUND(area_m2,1) AS area_m2, "
+            "ROUND(confidence,4) AS confidence "
+            "FROM change_features WHERE confidence > 0.6 "
+            "ORDER BY confidence DESC LIMIT 10",
+        ),
+    ]
+    for title, sql in queries:
+        print(f"\n  {title}:")
+        try:
+            df = query_change_features(sql)
+            print(df.to_string(index=False) if not df.empty else "  (no rows)")
+        except Exception as exc:
+            print(f"  Query error: {exc}")
 
     # ── GeoPackage layer listing (current run only) ───────────────────────────
     print("\n" + "="*60)

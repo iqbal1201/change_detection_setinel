@@ -3,19 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Satellite Change Detection</title>
+  <title>Sentinel-2 Change Detection</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
 
-  <!-- Header -->
   <header class="header">
     <div class="header-inner">
       <div class="logo">
-        <span class="logo-icon">🛰</span>
+        <div class="logo-bar"></div>
         <div>
-          <h1>Satellite Change Detection</h1>
-          <p>Upload Sentinel-2 imagery and detect land-surface changes</p>
+          <h1>Change Detection</h1>
+          <p>Sentinel-2 multispectral land-surface analysis</p>
         </div>
       </div>
     </div>
@@ -24,45 +23,59 @@
   <main class="main">
     <form id="submitForm" novalidate>
 
-      <!-- ── Step 1: Upload Images ─────────────────────────────── -->
+      <!-- ── Input Imagery ─────────────────────────────────────── -->
       <section class="card">
         <div class="card-header">
-          <span class="step-badge">1</span>
-          <h2>Upload Sentinel-2 Images</h2>
+          <h2>Input Imagery</h2>
         </div>
         <p class="card-hint">
-          Each upload should be a <strong>ZIP file</strong> containing three band files:
-          <code>B02.tif</code>, <code>B03.tif</code>, <code>B04.tif</code>
+          Upload a <strong>ZIP file</strong> for each acquisition date.
+          Each ZIP must contain <code>B02.tif</code>, <code>B03.tif</code>, <code>B04.tif</code>
+          (Blue, Green, Red bands at 10 m resolution).
         </p>
 
         <div class="upload-grid">
           <div class="upload-zone" id="zone1">
             <input type="file" name="date1_zip" id="date1_zip" accept=".zip" required hidden />
             <label for="date1_zip" class="upload-label">
-              <div class="upload-icon">📅</div>
-              <div class="upload-title">Date 1 — Before</div>
-              <div class="upload-sub" id="fname1">Click to browse or drag & drop</div>
+              <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+              <div class="upload-title">Before  (T1)</div>
+              <div class="upload-sub" id="fname1">Click to browse or drag &amp; drop</div>
             </label>
           </div>
 
-          <div class="upload-arrow">→</div>
+          <div class="upload-arrow">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+          </div>
 
           <div class="upload-zone" id="zone2">
             <input type="file" name="date2_zip" id="date2_zip" accept=".zip" required hidden />
             <label for="date2_zip" class="upload-label">
-              <div class="upload-icon">📅</div>
-              <div class="upload-title">Date 2 — After</div>
-              <div class="upload-sub" id="fname2">Click to browse or drag & drop</div>
+              <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+              <div class="upload-title">After  (T2)</div>
+              <div class="upload-sub" id="fname2">Click to browse or drag &amp; drop</div>
             </label>
           </div>
         </div>
       </section>
 
-      <!-- ── Step 2: Choose Method ─────────────────────────────── -->
+      <!-- ── Detection Method ──────────────────────────────────── -->
       <section class="card">
         <div class="card-header">
-          <span class="step-badge">2</span>
-          <h2>Choose Detection Method</h2>
+          <h2>Detection Method</h2>
         </div>
 
         <div class="method-grid">
@@ -85,46 +98,44 @@
           {% endfor %}
         </div>
 
-        <!-- VLM Prompt (method 6 only) -->
+        <!-- VLM options — shown only when Method 6 is selected -->
         <div id="vlmBlock" class="vlm-block hidden">
           <label class="field-label" for="promptInput">
             Analysis Prompt
-            <span class="field-hint">— customise what the VLM should focus on</span>
+            <span class="field-hint">— optional, customise the VLM focus</span>
           </label>
           <textarea id="promptInput" name="prompt" rows="8"
-                    class="prompt-textarea" placeholder="Describe what you want the model to analyse…"></textarea>
+                    class="prompt-textarea"
+                    placeholder="Describe what the model should analyse…"></textarea>
 
           <label class="field-label" style="margin-top:1rem;" for="vlmMode">VLM Backend</label>
           <select id="vlmMode" name="vlm_mode" class="select-input">
-            <option value="auto">Auto (tries API keys then local LLaVA)</option>
-            <option value="anthropic">Anthropic Claude (ANTHROPIC_API_KEY required)</option>
-            <option value="openai">OpenAI GPT-4o (OPENAI_API_KEY required)</option>
-            <option value="llava">Local LLaVA-1.5-7B (GPU + ~6 GB VRAM)</option>
-            <option value="rule_based">Rule-based fallback (no key / GPU needed)</option>
+            <option value="auto">Auto — tries OpenAI API then local LLaVA</option>
+            <option value="openai">OpenAI GPT-4o  (OPENAI_API_KEY required)</option>
+            <option value="llava">Local LLaVA-1.5-7B  (GPU + ~6 GB VRAM)</option>
+            <option value="rule_based">Rule-based  (no API key or GPU required)</option>
           </select>
         </div>
       </section>
 
-      <!-- ── Step 3: Options & Submit ──────────────────────────── -->
+      <!-- ── Run ───────────────────────────────────────────────── -->
       <section class="card submit-card">
-        <div class="options-row">
-          <label class="toggle-label">
-            <input type="checkbox" name="normalize" id="normalizeCheck" value="true" checked />
-            <span class="toggle-track"><span class="toggle-thumb"></span></span>
-            Apply radiometric normalisation
-          </label>
-        </div>
+        <label class="toggle-label">
+          <input type="checkbox" name="normalize" id="normalizeCheck" value="true" checked />
+          <span class="toggle-track"><span class="toggle-thumb"></span></span>
+          Apply radiometric normalisation
+        </label>
 
         <button type="submit" id="submitBtn" class="btn-submit">
           <span id="btnText">Run Analysis</span>
-          <span id="btnSpinner" class="btn-spinner hidden">⏳</span>
+          <span id="btnSpinner" class="btn-spinner hidden"></span>
         </button>
       </section>
 
     </form>
   </main>
 
-  <!-- ── Loading Overlay ─────────────────────────────────────── -->
+  <!-- ── Processing overlay ──────────────────────────────────── -->
   <div id="overlay" class="overlay hidden">
     <div class="overlay-card">
       <div class="spinner"></div>
@@ -137,7 +148,6 @@
   </div>
 
   <script>
-    // ── Pre-fill default VLM prompt ────────────────────────────────────────
     document.getElementById("promptInput").value = `You are analyzing a composite satellite image showing a land-surface change detection result. The image has three panels side by side:
   LEFT   — the scene BEFORE change (T1, multispectral visible bands)
   MIDDLE — the scene AFTER change  (T2, same sensor)

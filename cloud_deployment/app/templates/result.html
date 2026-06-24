@@ -8,13 +8,12 @@
 </head>
 <body>
 
-  <!-- Header -->
   <header class="header">
     <div class="header-inner">
       <div class="logo">
-        <span class="logo-icon">🛰</span>
+        <div class="logo-bar"></div>
         <div>
-          <h1>Change Detection Results</h1>
+          <h1>Analysis Results</h1>
           <p>{{ job.method_name }}</p>
         </div>
       </div>
@@ -48,7 +47,7 @@
       <div class="card-header">
         <h2>Visual Analysis</h2>
         <a href="data:image/png;base64,{{ job.figure_b64 }}" download="change_result.png"
-           class="btn-dl">⬇ Download PNG</a>
+           class="btn-dl">Download PNG</a>
       </div>
       <div class="figure-wrap">
         <img src="data:image/png;base64,{{ job.figure_b64 }}"
@@ -65,7 +64,7 @@
         <h2>Semantic Description</h2>
         {% if job.backend %}
         <span class="badge badge-cpu" style="margin-left:auto;">
-          Backend: {{ job.backend }}
+          {{ job.backend }}
         </span>
         {% endif %}
       </div>
@@ -73,13 +72,13 @@
     </section>
     {% endif %}
 
-    <!-- ── Interactive Folium Map ─────────────────────────────── -->
+    <!-- ── Interactive Map ───────────────────────────────────── -->
     {% if job.folium_html %}
     <section class="card">
       <div class="card-header">
         <h2>Interactive Map</h2>
-        <span class="card-hint" style="margin-left:auto; font-size:0.8rem;">
-          Click polygons to inspect confidence &amp; area
+        <span style="margin-left:auto; font-size:0.78rem; color:var(--muted);">
+          Click polygons for area and confidence details
         </span>
       </div>
       <div class="map-wrap">
@@ -93,21 +92,23 @@
     {% else %}
     {% if not job.description %}
     <section class="card">
-      <p class="card-hint" style="text-align:center; padding:1rem;">
-        No polygons were detected — the scene may show no significant change,
-        or the threshold may need adjustment.
+      <p style="text-align:center; padding:1.5rem; font-size:0.85rem; color:var(--muted);">
+        No polygons were detected. The scene may show no significant change,
+        or the detection threshold may need adjustment.
       </p>
     </section>
     {% endif %}
     {% endif %}
 
     <!-- ── Job Info ───────────────────────────────────────────── -->
-    <section class="card" style="margin-top:1rem;">
+    <section class="card" style="margin-top:0.5rem;">
       <details>
-        <summary style="cursor:pointer; color:#8b949e; font-size:0.85rem;">Job details</summary>
-        <div style="margin-top:0.75rem; font-size:0.82rem; color:#8b949e; line-height:1.7;">
-          <div><strong>Job ID:</strong> {{ job_id }}</div>
-          <div><strong>Method:</strong> {{ job.method_name }}</div>
+        <summary style="cursor:pointer; color:var(--muted); font-size:0.82rem; user-select:none;">
+          Job details
+        </summary>
+        <div style="margin-top:0.75rem; font-size:0.81rem; color:var(--muted); line-height:1.7;">
+          <div><strong style="color:var(--text);">Job ID:</strong> {{ job_id }}</div>
+          <div><strong style="color:var(--text);">Method:</strong> {{ job.method_name }}</div>
         </div>
       </details>
     </section>

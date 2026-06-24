@@ -369,8 +369,6 @@ def describe(
 
     backends = []
     if mode == "auto":
-        if os.environ.get("ANTHROPIC_API_KEY"):
-            backends.append(("anthropic", lambda: _describe_anthropic(panel)))
         if os.environ.get("OPENAI_API_KEY"):
             backends.append(("openai",    lambda: _describe_openai(panel)))
         backends.append(("llava",       lambda: _describe_llava(panel)))
