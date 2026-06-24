@@ -8,7 +8,7 @@
 #   _SERVICE   Cloud Run service name, e.g. scd-app
 #   _RUN_SA    Cloud Run runtime SA, e.g. scd-run-sa@PROJECT_ID.iam.gserviceaccount.com
 #
-# $PROJECT_ID and $COMMIT_SHA are injected automatically by Cloud Build.
+# $PROJECT_ID and $BUILD_ID are injected automatically by Cloud Build.
 
 substitutions:
   _REGION:  asia-southeast1
@@ -26,7 +26,7 @@ steps:
       - cloud_deployment/Dockerfile
       # Tag with both commit SHA (immutable) and latest (mutable pointer)
       - -t
-      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${COMMIT_SHA}
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${BUILD_ID}
       - -t
       - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:latest
       - .   # build context = repo root (so Dockerfile can COPY methods/ utils/)
@@ -49,7 +49,7 @@ steps:
       - run
       - deploy
       - ${_SERVICE}
-      - --image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${COMMIT_SHA}
+      - --image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${BUILD_ID}
       - --region=${_REGION}
       - --platform=managed
       - --allow-unauthenticated
@@ -65,7 +65,7 @@ steps:
 
 # Record pushed images in build history
 images:
-  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${COMMIT_SHA}
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${BUILD_ID}
   - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:latest
 
 options:
