@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+dist/
+build/
+*.whl
+
+# Virtual environments
+solafune-env/
+venv/
+.venv/
+env/
+
+# Data (large files — mount via GCS in production)
+data/
+outputs/
+visualizations/
+
+# Dev artifacts
+.git/
+.gitignore
+*.md
+*.pdf
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/
+*.code-workspace

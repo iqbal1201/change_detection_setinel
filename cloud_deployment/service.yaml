@@ -1,0 +1,73 @@
+# ── Cloud Run Service Specification ──────────────────────────────────────────
+# Deploy with:
+#   sed substitutions then: gcloud run services replace cloud_deployment/service.yaml
+#
+# OR let cloudbuild.yaml manage this via `gcloud run deploy` flags.
+# This file is useful for reviewing the full service config in version control.
+#
+# Replace placeholders before applying:
+#   PROJECT_ID  → your GCP project ID
+#   REGION      → e.g. asia-southeast1
+#   REPO        → Artifact Registry repo, e.g. scd-images
+#   SERVICE     → Cloud Run service name, e.g. scd-app
+#   RUN_SA      → runtime service account email
+
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: SERVICE
+  labels:
+    cloud.googleapis.com/location: REGION
+  annotations:
+    run.googleapis.com/ingress: all
+
+spec:
+  template:
+    metadata:
+      annotations:
+        # Scale to zero; max 5 instances
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "5"
+        # Gen 2 execution environment (better performance + network)
+        run.googleapis.com/execution-environment: gen2
+        # Keep CPU allocated during request (needed for background threads)
+        run.googleapis.com/cpu-throttling: "false"
+
+    spec:
+      containerConcurrency: 1       # one background job per instance
+      timeoutSeconds: 900           # 15 min ceiling for deep methods
+      serviceAccountName: RUN_SA
+
+      containers:
+        - image: REGION-docker.pkg.dev/PROJECT_ID/REPO/SERVICE:latest
+          ports:
+            - name: http1
+              containerPort: 8080
+
+          resources:
+            limits:
+              cpu: "2"
+              memory: 4Gi
+
+          env:
+            - name: PORT
+              value: "8080"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+
+          # API keys pulled from Secret Manager at runtime
+          # Secrets must be created via setup.sh before first deploy
+          envFrom: []
+          volumeMounts: []
+
+          # Secrets mounted as environment variables
+          env:
+            - name: PORT
+              value: "8080"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: OPENAI_API_KEY
+                  key: latest

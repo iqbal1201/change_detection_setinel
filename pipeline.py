@@ -41,6 +41,7 @@ PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── utils ─────────────────────────────────────────────────────────────────────
 from utils.data_loader import run_part1
+from utils.normalizer import local_normalize
 from utils.vectorizer import raster_to_polygons, save_raster
 from utils.storage import save_to_geopackage, list_layers
 from utils.visualizer import (
@@ -116,7 +117,14 @@ def _save_outputs(
 # Main pipeline
 # ─────────────────────────────────────────────────────────────────────────────
 
-def main(run_methods=None, skip_gfm=False, skip_vlm=False, vlm_mode="auto"):
+def main(
+    run_methods=None,
+    skip_gfm=False,
+    skip_vlm=False,
+    vlm_mode="auto",
+    normalize=True,
+    norm_window=64,
+):
     if run_methods is None:
         run_methods = {1, 2, 3, 4, 5}
 
@@ -125,6 +133,17 @@ def main(run_methods=None, skip_gfm=False, skip_vlm=False, vlm_mode="auto"):
     print("  PART 1 — Data Loading & Stacking")
     print("="*60)
     img1, img2, profile = run_part1()
+
+    # ── Radiometric normalisation ─────────────────────────────────────────────
+    if normalize:
+        print("\n" + "="*60)
+        print("  PRE-PROCESSING — Local Radiometric Normalisation")
+        print("="*60)
+        print(f"  Applying local z-score normalisation (window={norm_window} px)...")
+        img1, img2 = local_normalize(img1, img2, window_size=norm_window)
+        print("  Done — mosaic seams and brightness offsets suppressed.")
+    else:
+        print("\n  [Pre-processing] Radiometric normalisation skipped (--no-normalize).")
 
     results: Dict[str, Dict] = {}
     all_gdfs: Dict[str, object] = {}
@@ -264,11 +283,18 @@ def main(run_methods=None, skip_gfm=False, skip_vlm=False, vlm_mode="auto"):
             print("  VLM description failed:")
             traceback.print_exc()
 
-    # ── GeoPackage layer listing ──────────────────────────────────────────────
+    # ── GeoPackage layer listing (current run only) ───────────────────────────
     print("\n" + "="*60)
-    print("  PART 3 — GeoPackage Contents")
+    print("  PART 3 — GeoPackage Contents (this run)")
     print("="*60)
-    list_layers()
+    if results:
+        for layer_name, stats in results.items():
+            print(f"  {layer_name}: {stats['n_polygons']} features, "
+                  f"{stats['area_total']/1e6:.4f} km², "
+                  f"conf={stats['mean_confidence']:.3f}")
+    else:
+        print("  No layers written in this run.")
+    print("  (To see all historical layers: open outputs/change_features.gpkg in QGIS)")
 
     # ── Summary ───────────────────────────────────────────────────────────────
     print("\n" + "="*60)
@@ -290,6 +316,14 @@ def main(run_methods=None, skip_gfm=False, skip_vlm=False, vlm_mode="auto"):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Solafune change-detection pipeline."
+    )
+    parser.add_argument(
+        "--no-normalize", action="store_true",
+        help="Skip local radiometric normalisation (use raw band values).",
+    )
+    parser.add_argument(
+        "--norm-window", type=int, default=64, metavar="PX",
+        help="Sliding-window size for local normalisation in pixels (default: 64).",
     )
     parser.add_argument(
         "--skip-gfm", action="store_true",
@@ -317,4 +351,6 @@ if __name__ == "__main__":
         skip_gfm=args.skip_gfm,
         skip_vlm=args.skip_vlm,
         vlm_mode=args.vlm_mode,
+        normalize=not args.no_normalize,
+        norm_window=args.norm_window,
     )

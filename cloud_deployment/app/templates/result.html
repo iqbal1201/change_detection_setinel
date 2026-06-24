@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Results — {{ job.method_name }}</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-icon">🛰</span>
+        <div>
+          <h1>Change Detection Results</h1>
+          <p>{{ job.method_name }}</p>
+        </div>
+      </div>
+      <a href="/" class="btn-back">← New Analysis</a>
+    </div>
+  </header>
+
+  <main class="main">
+
+    <!-- ── Stats Row (methods 1–5) ────────────────────────────── -->
+    {% if job.stats %}
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">{{ job.stats.n_polygons }}</div>
+        <div class="stat-label">Changed Polygons</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">{{ job.stats.area_km2 }} km²</div>
+        <div class="stat-label">Total Changed Area</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">{{ "%.3f"|format(job.stats.mean_confidence) }}</div>
+        <div class="stat-label">Mean Confidence</div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- ── Change Figure ──────────────────────────────────────── -->
+    {% if job.figure_b64 %}
+    <section class="card">
+      <div class="card-header">
+        <h2>Visual Analysis</h2>
+        <a href="data:image/png;base64,{{ job.figure_b64 }}" download="change_result.png"
+           class="btn-dl">⬇ Download PNG</a>
+      </div>
+      <div class="figure-wrap">
+        <img src="data:image/png;base64,{{ job.figure_b64 }}"
+             alt="Change detection result panels"
+             class="result-figure" />
+      </div>
+    </section>
+    {% endif %}
+
+    <!-- ── VLM Description ───────────────────────────────────── -->
+    {% if job.description %}
+    <section class="card">
+      <div class="card-header">
+        <h2>Semantic Description</h2>
+        {% if job.backend %}
+        <span class="badge badge-cpu" style="margin-left:auto;">
+          Backend: {{ job.backend }}
+        </span>
+        {% endif %}
+      </div>
+      <pre class="description-box">{{ job.description }}</pre>
+    </section>
+    {% endif %}
+
+    <!-- ── Interactive Folium Map ─────────────────────────────── -->
+    {% if job.folium_html %}
+    <section class="card">
+      <div class="card-header">
+        <h2>Interactive Map</h2>
+        <span class="card-hint" style="margin-left:auto; font-size:0.8rem;">
+          Click polygons to inspect confidence &amp; area
+        </span>
+      </div>
+      <div class="map-wrap">
+        <iframe
+          srcdoc="{{ job.folium_html | e }}"
+          class="folium-frame"
+          title="Change detection map"
+          sandbox="allow-scripts allow-same-origin">
+        </iframe>
+      </div>
+    </section>
+    {% else %}
+    {% if not job.description %}
+    <section class="card">
+      <p class="card-hint" style="text-align:center; padding:1rem;">
+        No polygons were detected — the scene may show no significant change,
+        or the threshold may need adjustment.
+      </p>
+    </section>
+    {% endif %}
+    {% endif %}
+
+    <!-- ── Job Info ───────────────────────────────────────────── -->
+    <section class="card" style="margin-top:1rem;">
+      <details>
+        <summary style="cursor:pointer; color:#8b949e; font-size:0.85rem;">Job details</summary>
+        <div style="margin-top:0.75rem; font-size:0.82rem; color:#8b949e; line-height:1.7;">
+          <div><strong>Job ID:</strong> {{ job_id }}</div>
+          <div><strong>Method:</strong> {{ job.method_name }}</div>
+        </div>
+      </details>
+    </section>
+
+  </main>
+</body>
+</html>

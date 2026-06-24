@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Satellite Change Detection</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-icon">🛰</span>
+        <div>
+          <h1>Satellite Change Detection</h1>
+          <p>Upload Sentinel-2 imagery and detect land-surface changes</p>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="main">
+    <form id="submitForm" novalidate>
+
+      <!-- ── Step 1: Upload Images ─────────────────────────────── -->
+      <section class="card">
+        <div class="card-header">
+          <span class="step-badge">1</span>
+          <h2>Upload Sentinel-2 Images</h2>
+        </div>
+        <p class="card-hint">
+          Each upload should be a <strong>ZIP file</strong> containing three band files:
+          <code>B02.tif</code>, <code>B03.tif</code>, <code>B04.tif</code>
+        </p>
+
+        <div class="upload-grid">
+          <div class="upload-zone" id="zone1">
+            <input type="file" name="date1_zip" id="date1_zip" accept=".zip" required hidden />
+            <label for="date1_zip" class="upload-label">
+              <div class="upload-icon">📅</div>
+              <div class="upload-title">Date 1 — Before</div>
+              <div class="upload-sub" id="fname1">Click to browse or drag & drop</div>
+            </label>
+          </div>
+
+          <div class="upload-arrow">→</div>
+
+          <div class="upload-zone" id="zone2">
+            <input type="file" name="date2_zip" id="date2_zip" accept=".zip" required hidden />
+            <label for="date2_zip" class="upload-label">
+              <div class="upload-icon">📅</div>
+              <div class="upload-title">Date 2 — After</div>
+              <div class="upload-sub" id="fname2">Click to browse or drag & drop</div>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Step 2: Choose Method ─────────────────────────────── -->
+      <section class="card">
+        <div class="card-header">
+          <span class="step-badge">2</span>
+          <h2>Choose Detection Method</h2>
+        </div>
+
+        <div class="method-grid">
+          {% for id, m in methods.items() %}
+          <label class="method-card {% if m.gpu %}gpu-method{% endif %}" data-method="{{ id }}">
+            <input type="radio" name="method" value="{{ id }}"
+                   {% if id == "1" %}checked{% endif %} />
+            <div class="method-card-body">
+              <div class="method-top">
+                <span class="method-name">{{ m.name }}</span>
+                {% if m.gpu %}
+                <span class="badge badge-gpu">GPU</span>
+                {% else %}
+                <span class="badge badge-cpu">CPU</span>
+                {% endif %}
+              </div>
+              <p class="method-desc">{{ m.desc }}</p>
+            </div>
+          </label>
+          {% endfor %}
+        </div>
+
+        <!-- VLM Prompt (method 6 only) -->
+        <div id="vlmBlock" class="vlm-block hidden">
+          <label class="field-label" for="promptInput">
+            Analysis Prompt
+            <span class="field-hint">— customise what the VLM should focus on</span>
+          </label>
+          <textarea id="promptInput" name="prompt" rows="8"
+                    class="prompt-textarea" placeholder="Describe what you want the model to analyse…"></textarea>
+
+          <label class="field-label" style="margin-top:1rem;" for="vlmMode">VLM Backend</label>
+          <select id="vlmMode" name="vlm_mode" class="select-input">
+            <option value="auto">Auto (tries API keys then local LLaVA)</option>
+            <option value="anthropic">Anthropic Claude (ANTHROPIC_API_KEY required)</option>
+            <option value="openai">OpenAI GPT-4o (OPENAI_API_KEY required)</option>
+            <option value="llava">Local LLaVA-1.5-7B (GPU + ~6 GB VRAM)</option>
+            <option value="rule_based">Rule-based fallback (no key / GPU needed)</option>
+          </select>
+        </div>
+      </section>
+
+      <!-- ── Step 3: Options & Submit ──────────────────────────── -->
+      <section class="card submit-card">
+        <div class="options-row">
+          <label class="toggle-label">
+            <input type="checkbox" name="normalize" id="normalizeCheck" value="true" checked />
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            Apply radiometric normalisation
+          </label>
+        </div>
+
+        <button type="submit" id="submitBtn" class="btn-submit">
+          <span id="btnText">Run Analysis</span>
+          <span id="btnSpinner" class="btn-spinner hidden">⏳</span>
+        </button>
+      </section>
+
+    </form>
+  </main>
+
+  <!-- ── Loading Overlay ─────────────────────────────────────── -->
+  <div id="overlay" class="overlay hidden">
+    <div class="overlay-card">
+      <div class="spinner"></div>
+      <h3 id="overlayTitle">Processing…</h3>
+      <p id="overlayStatus" class="overlay-status">Starting…</p>
+      <div class="progress-bar-track">
+        <div class="progress-bar-fill" id="progressFill"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ── Pre-fill default VLM prompt ────────────────────────────────────────
+    document.getElementById("promptInput").value = `You are analyzing a composite satellite image showing a land-surface change detection result. The image has three panels side by side:
+  LEFT   — the scene BEFORE change (T1, multispectral visible bands)
+  MIDDLE — the scene AFTER change  (T2, same sensor)
+  RIGHT  — the CHANGE MASK overlaid in red on T2 (red = detected change)
+
+Please provide a structured analysis with these five sections:
+1. CHANGE TYPE: What kind of surface change is visible?
+2. SPATIAL EXTENT: How much area is affected? Concentrated or dispersed?
+3. CHANGE PATTERN: Shape and arrangement of changed areas.
+4. LIKELY CAUSE: Most plausible land-use activity or event.
+5. CONFIDENCE: Your confidence level and the specific visual evidence.
+
+State uncertainty explicitly — do not hallucinate NIR or SWIR information.`;
+  </script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

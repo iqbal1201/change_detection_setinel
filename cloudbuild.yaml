@@ -1,0 +1,74 @@
+# ── Cloud Build pipeline ──────────────────────────────────────────────────────
+# Triggered on push to main branch.
+# Steps: Build → Push to Artifact Registry → Deploy to Cloud Run
+#
+# Set these substitution variables in your Cloud Build trigger (GCP Console):
+#   _REGION    e.g. asia-southeast1
+#   _REPO      Artifact Registry repo name, e.g. scd-images
+#   _SERVICE   Cloud Run service name, e.g. scd-app
+#   _RUN_SA    Cloud Run runtime SA, e.g. scd-run-sa@PROJECT_ID.iam.gserviceaccount.com
+#
+# $PROJECT_ID and $COMMIT_SHA are injected automatically by Cloud Build.
+
+substitutions:
+  _REGION:  asia-southeast1
+  _REPO:    scd-images
+  _SERVICE: scd-app
+  _RUN_SA:  ""   # set in trigger after running setup.sh
+
+steps:
+  # ── 1. Build Docker image ─────────────────────────────────────────────────
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - cloud_deployment/Dockerfile
+      # Tag with both commit SHA (immutable) and latest (mutable pointer)
+      - -t
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${COMMIT_SHA}
+      - -t
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:latest
+      - .   # build context = repo root (so Dockerfile can COPY methods/ utils/)
+
+  # ── 2. Push both tags to Artifact Registry ────────────────────────────────
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    waitFor: [build]
+    args:
+      - push
+      - --all-tags
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}
+
+  # ── 3. Deploy to Cloud Run ────────────────────────────────────────────────
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    waitFor: [push]
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${COMMIT_SHA}
+      - --region=${_REGION}
+      - --platform=managed
+      - --allow-unauthenticated
+      - --service-account=${_RUN_SA}
+      - --memory=4Gi
+      - --cpu=2
+      - --timeout=900          # 15 min — deep methods (DINOv2/SAM2) can be slow
+      - --concurrency=1        # 1 job per instance (in-memory job dict)
+      - --min-instances=0      # scale to zero when idle
+      - --max-instances=5
+      # Secrets are mounted as env vars at runtime (created by setup.sh)
+      - --set-secrets=OPENAI_API_KEY=OPENAI_API_KEY:latest
+
+# Record pushed images in build history
+images:
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${COMMIT_SHA}
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:latest
+
+options:
+  machineType: E2_HIGHCPU_8    # faster builds for the heavy GDAL/rasterio layer
+  logging: CLOUD_LOGGING_ONLY
+  substitutionOption: ALLOW_LOOSE
