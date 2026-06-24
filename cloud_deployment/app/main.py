@@ -107,3 +107,13 @@ async def results(request: Request, job_id: str):
         "job":     job,
         "job_id":  job_id,
     })
+
+
+@app.get("/map/{job_id}", response_class=HTMLResponse)
+async def map_view(job_id: str):
+    if job_id not in jobs:
+        raise HTTPException(404, "Job not found")
+    folium_html = jobs[job_id].get("folium_html")
+    if not folium_html:
+        raise HTTPException(404, "No map for this job")
+    return HTMLResponse(folium_html)

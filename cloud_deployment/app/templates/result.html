@@ -84,10 +84,9 @@
       </div>
       <div class="map-wrap">
         <iframe
-          srcdoc="{{ job.folium_html | e }}"
+          src="/map/{{ job_id }}"
           class="folium-frame"
-          title="Change detection map"
-          sandbox="allow-scripts allow-same-origin">
+          title="Change detection map">
         </iframe>
       </div>
     </section>
