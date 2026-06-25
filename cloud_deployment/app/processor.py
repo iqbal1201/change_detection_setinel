@@ -8,12 +8,19 @@ from __future__ import annotations
 
 import base64
 import io
+import os
 import shutil
 import sys
 import traceback
 import zipfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+
+# ── GCS / BigQuery config (injected as env vars by Cloud Run) ─────────────────
+GCS_BUCKET = os.environ.get("GCS_BUCKET", "")
+BQ_DATASET = os.environ.get("BQ_DATASET", "scd_results")
+BQ_TABLE   = "change_polygons"
 
 import matplotlib
 matplotlib.use("Agg")
@@ -133,27 +140,38 @@ def _extract_and_load(zip_path: Path, out_dir: Path):
 
 # ── Visualization helpers ──────────────────────────────────────────────────────
 
+_MAX_DISPLAY_PX = 1024  # downsample large Sentinel-2 tiles for matplotlib display
+
+def _downsample(arr: np.ndarray) -> np.ndarray:
+    """Stride-based downscale so matplotlib never holds a full 10980×10980 array."""
+    h, w = arr.shape[:2]
+    step = max(1, max(h, w) // _MAX_DISPLAY_PX)
+    return arr[::step, ::step]
+
+
 def _to_rgb(img: np.ndarray) -> np.ndarray:
+    img = _downsample(img)
     rgb = img[:, :, [2, 1, 0]].copy().astype(np.float32)
+    np.nan_to_num(rgb, nan=0.0, copy=False)
     lo, hi = np.percentile(rgb, 2), np.percentile(rgb, 98)
     return np.clip((rgb - lo) / (hi - lo + 1e-8), 0, 1)
 
 
 def _fig_to_b64(fig) -> str:
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=110, bbox_inches="tight")
+    fig.savefig(buf, format="png", dpi=85, bbox_inches="tight")
     plt.close(fig)
     buf.seek(0)
     return base64.b64encode(buf.read()).decode()
 
 
 def _make_change_figure(img1, img2, prob, binary, title: str) -> str:
-    fig, axes = plt.subplots(1, 4, figsize=(22, 5.5))
+    fig, axes = plt.subplots(1, 4, figsize=(20, 5))
     fig.patch.set_facecolor("#0e1524")
-    fig.suptitle(title, fontsize=12, fontweight="600", color="#dce8f8",
+    fig.suptitle(title, fontsize=11, fontweight="600", color="#dce8f8",
                  y=1.01, ha="left", x=0.01)
 
-    panel_bg = "#0e1524"
+    panel_bg    = "#0e1524"
     label_color = "#7b90b2"
 
     for ax in axes:
@@ -168,7 +186,8 @@ def _make_change_figure(img1, img2, prob, binary, title: str) -> str:
     axes[1].imshow(_to_rgb(img2))
     axes[1].set_title("After (T2)", color=label_color, fontsize=9, pad=6)
 
-    im = axes[2].imshow(prob, cmap="YlOrRd", vmin=0, vmax=1)
+    prob_ds = _downsample(prob)
+    im = axes[2].imshow(prob_ds, cmap="YlOrRd", vmin=0, vmax=1)
     axes[2].set_title("Change Intensity", color=label_color, fontsize=9, pad=6)
     cb = plt.colorbar(im, ax=axes[2], fraction=0.046, pad=0.04)
     cb.ax.yaxis.set_tick_params(color=label_color, labelsize=7)
@@ -176,8 +195,9 @@ def _make_change_figure(img1, img2, prob, binary, title: str) -> str:
     cb.outline.set_edgecolor("#283a5c")
 
     axes[3].imshow(_to_rgb(img2), alpha=0.55)
+    bin_ds = _downsample(binary)
     axes[3].imshow(
-        np.ma.masked_where(binary == 0, binary),
+        np.ma.masked_where(bin_ds == 0, bin_ds),
         cmap="Reds", vmin=0, vmax=1, alpha=0.8,
     )
     axes[3].set_title("Detected Change", color=label_color, fontsize=9, pad=6)
@@ -188,8 +208,12 @@ def _make_change_figure(img1, img2, prob, binary, title: str) -> str:
 
 def _make_folium_html(gdf, method_layer: str) -> Optional[str]:
     import folium
-    from folium.plugins import MeasureControl, MiniMap
-    from branca.element import Element
+    from folium.plugins import MeasureControl
+    try:
+        from folium.plugins import MiniMap
+        _has_minimap = True
+    except ImportError:
+        _has_minimap = False
 
     if gdf is None or gdf.empty:
         return None
@@ -287,32 +311,30 @@ def _make_folium_html(gdf, method_layer: str) -> Optional[str]:
     m.fit_bounds([[bounds[1], bounds[0]], [bounds[3], bounds[2]]])
 
     MeasureControl(position="topleft", primary_length_unit="meters").add_to(m)
-    MiniMap(toggle_display=True, position="bottomleft",
-            width=140, height=140, zoom_level_offset=-6).add_to(m)
+    if _has_minimap:
+        MiniMap(toggle_display=True, position="bottomleft",
+                width=140, height=140, zoom_level_offset=-6).add_to(m)
     folium.LayerControl(collapsed=False).add_to(m)
 
-    # Cartographic legend
+    # Inject cartographic legend via string replacement (no branca dependency)
     legend_html = (
-        f'<div id="cd-legend" style="'
-        f'position:fixed;bottom:30px;right:10px;z-index:1000;'
-        f'background:rgba(10,16,30,0.93);backdrop-filter:blur(8px);'
-        f'border:1px solid rgba(255,255,255,0.1);border-radius:8px;'
-        f'padding:16px 18px;font-family:-apple-system,\'Segoe UI\',sans-serif;'
-        f'color:#dce8f8;font-size:12px;min-width:205px;'
-        f'box-shadow:0 4px 24px rgba(0,0,0,0.5);pointer-events:none;">'
-        f'<div style="font-weight:700;font-size:13px;margin-bottom:12px;'
-        f'color:#f0f6ff;letter-spacing:0.02em;">Change Detection</div>'
+        '<div id="cd-legend" style="'
+        'position:fixed;bottom:30px;right:10px;z-index:1000;'
+        'background:rgba(10,16,30,0.93);'
+        'border:1px solid rgba(255,255,255,0.1);border-radius:8px;'
+        'padding:16px 18px;font-family:sans-serif;'
+        'color:#dce8f8;font-size:12px;min-width:205px;'
+        'box-shadow:0 4px 24px rgba(0,0,0,0.5);pointer-events:none;">'
+        '<div style="font-weight:700;font-size:13px;margin-bottom:12px;color:#f0f6ff;">'
+        'Change Detection</div>'
         f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">'
         f'<div style="width:14px;height:14px;background:{color};'
-        f'border-radius:2px;flex-shrink:0;opacity:0.85;"></div>'
+        f'border-radius:2px;opacity:0.85;flex-shrink:0;"></div>'
         f'<span>{method_display}</span></div>'
-        f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">'
-        f'<div style="width:48px;height:4px;'
-        f'background:linear-gradient(to right,{color}28,{color});'
-        f'border-radius:2px;flex-shrink:0;"></div>'
-        f'<span style="color:#7b90b2;font-size:11px;">opacity = confidence</span></div>'
-        f'<hr style="border:none;border-top:1px solid rgba(255,255,255,0.08);margin:10px 0;">'
-        f'<table style="width:100%;border-collapse:collapse;font-size:11px;">'
+        '<div style="font-size:11px;color:#7b90b2;margin-bottom:10px;">'
+        'polygon opacity = confidence</div>'
+        '<hr style="border:none;border-top:1px solid rgba(255,255,255,0.08);margin:10px 0;">'
+        '<table style="width:100%;border-collapse:collapse;font-size:11px;">'
         f'<tr><td style="color:#7b90b2;padding:2px 0;">Polygons</td>'
         f'<td style="text-align:right;color:#dce8f8;font-weight:600;">{n_poly}</td></tr>'
         f'<tr><td style="color:#7b90b2;padding:2px 0;">Total area</td>'
@@ -320,14 +342,136 @@ def _make_folium_html(gdf, method_layer: str) -> Optional[str]:
         f'<tr><td style="color:#7b90b2;padding:2px 0;">Confidence</td>'
         f'<td style="text-align:right;color:#dce8f8;font-weight:600;">'
         f'{conf_min:.2f} – {conf_max:.2f}</td></tr>'
-        f'</table>'
-        f'<hr style="border:none;border-top:1px solid rgba(255,255,255,0.08);margin:10px 0;">'
-        f'<div style="font-size:10px;color:#4a6080;">Click polygon for details</div>'
-        f'</div>'
+        '</table>'
+        '<hr style="border:none;border-top:1px solid rgba(255,255,255,0.08);margin:10px 0;">'
+        '<div style="font-size:10px;color:#4a6080;">Click polygon for details</div>'
+        '</div>'
     )
-    m.get_root().html.add_child(Element(legend_html))
 
-    return m._repr_html_()
+    html_str = m._repr_html_()
+    html_str = html_str.replace("</body>", legend_html + "\n</body>")
+    return html_str
+
+
+# ── Cloud Storage helpers ──────────────────────────────────────────────────────
+
+def _raster_to_bytes(arr: np.ndarray, profile: dict, dtype: str = "float32") -> bytes:
+    """Encode a 2-D numpy array as a single-band GeoTIFF in memory."""
+    import rasterio
+    from rasterio.io import MemoryFile
+    out = profile.copy()
+    out.update(count=1, dtype=dtype, driver="GTiff", compress="lzw")
+    with MemoryFile() as mem:
+        with mem.open(**out) as dst:
+            dst.write(arr.astype(dtype), 1)
+        return mem.read()
+
+
+def _upload_gcs(data: bytes, gcs_path: str, content_type: str = "application/octet-stream") -> str:
+    """Upload bytes to GCS. Returns gs:// URI, or '' if bucket is not configured."""
+    if not GCS_BUCKET:
+        return ""
+    try:
+        from google.cloud import storage
+        blob = storage.Client().bucket(GCS_BUCKET).blob(gcs_path)
+        blob.upload_from_string(data, content_type=content_type)
+        uri = f"gs://{GCS_BUCKET}/{gcs_path}"
+        print(f"  [GCS] uploaded → {uri}")
+        return uri
+    except Exception as exc:
+        print(f"  [GCS] upload failed ({gcs_path}): {exc}")
+        return ""
+
+
+def _upload_job_assets(
+    job_id: str,
+    method_layer: str,
+    figure_b64: Optional[str],
+    folium_html: Optional[str],
+    prob: np.ndarray,
+    binary: np.ndarray,
+    profile: dict,
+    description: Optional[str],
+) -> dict:
+    """Upload all output assets to GCS under jobs/{job_id}/. Returns dict of gs:// URIs."""
+    prefix = f"jobs/{job_id}"
+    uris: dict = {}
+
+    if figure_b64:
+        uris["figure"] = _upload_gcs(
+            base64.b64decode(figure_b64),
+            f"{prefix}/change_figure.png", "image/png",
+        )
+    uris["prob"] = _upload_gcs(
+        _raster_to_bytes(prob, profile, "float32"),
+        f"{prefix}/{method_layer}_prob.tif", "image/tiff",
+    )
+    uris["binary"] = _upload_gcs(
+        _raster_to_bytes(binary.astype(np.uint8), profile, "uint8"),
+        f"{prefix}/{method_layer}_binary.tif", "image/tiff",
+    )
+    if folium_html:
+        uris["map"] = _upload_gcs(
+            folium_html.encode(), f"{prefix}/change_map.html", "text/html",
+        )
+    if description:
+        uris["vlm"] = _upload_gcs(
+            description.encode(), f"{prefix}/vlm_description.txt", "text/plain",
+        )
+    return uris
+
+
+# ── BigQuery helper ────────────────────────────────────────────────────────────
+
+def _insert_bq(
+    gdf,
+    job_id: str,
+    method: str,
+    method_name: str,
+    method_layer: str,
+    uris: dict,
+) -> None:
+    """Stream detected polygons into BigQuery change_polygons table."""
+    if not BQ_DATASET or gdf is None or gdf.empty:
+        return
+    try:
+        from google.cloud import bigquery
+        client    = bigquery.Client()
+        table_id  = f"{client.project}.{BQ_DATASET}.{BQ_TABLE}"
+        now       = datetime.now(timezone.utc).isoformat()
+
+        gdf_wgs = (
+            gdf.to_crs("EPSG:4326")
+            if gdf.crs and not gdf.crs.is_geographic
+            else gdf
+        )
+        rows = [
+            {
+                "job_id":         job_id,
+                "run_at":         now,
+                "method":         method,
+                "method_name":    method_name,
+                "method_layer":   method_layer,
+                "polygon_id":     int(i),
+                "geometry":       row.geometry.wkt if row.geometry else None,
+                "area_m2":        float(row.get("area_m2", 0)),
+                "confidence":     float(row.get("confidence", 0)),
+                "date_before":    str(row.get("date_before", "")),
+                "date_after":     str(row.get("date_after", "")),
+                "gcs_figure_uri": uris.get("figure", ""),
+                "gcs_prob_uri":   uris.get("prob", ""),
+                "gcs_binary_uri": uris.get("binary", ""),
+                "gcs_map_uri":    uris.get("map", ""),
+            }
+            for i, row in gdf_wgs.iterrows()
+        ]
+        errors = client.insert_rows_json(table_id, rows)
+        if errors:
+            print(f"  [BQ] insert errors: {errors}")
+        else:
+            print(f"  [BQ] inserted {len(rows)} rows → {table_id}")
+    except Exception as exc:
+        print(f"  [BQ] insert failed: {exc}")
 
 
 # ── Main job runner ────────────────────────────────────────────────────────────
@@ -393,10 +537,21 @@ def run_job(
             )
 
             update("Generating figure…")
-            figure_b64 = _make_change_figure(
-                img1, img2, prob, binary,
-                f"VLM Semantic Description  ·  base mask: Multi-Index PCA",
+            try:
+                figure_b64 = _make_change_figure(
+                    img1, img2, prob, binary,
+                    "VLM Semantic Description  ·  base mask: Multi-Index PCA",
+                )
+            except Exception:
+                figure_b64 = None
+            description = vlm_result.get("description", "")
+
+            update("Uploading assets to Cloud Storage…")
+            uris = _upload_job_assets(
+                job_id, "method_06_vlm", figure_b64, None,
+                prob, binary, profile, description,
             )
+
             jobs[job_id].update({
                 "status":      "done",
                 "progress":    "Complete",
@@ -404,8 +559,9 @@ def run_job(
                 "figure_b64":  figure_b64,
                 "folium_html": None,
                 "stats":       None,
-                "description": vlm_result.get("description", ""),
+                "description": description,
                 "backend":     vlm_result.get("backend", "unknown"),
+                "gcs_uris":    uris,
             })
             return
 
@@ -440,8 +596,24 @@ def run_job(
         n_poly     = len(gdf)
 
         update("Building visualizations…")
-        figure_b64  = _make_change_figure(img1, img2, prob, binary, name)
-        folium_html = _make_folium_html(gdf, meta["layer"])
+        try:
+            figure_b64 = _make_change_figure(img1, img2, prob, binary, name)
+        except Exception:
+            figure_b64 = None
+
+        try:
+            folium_html = _make_folium_html(gdf, meta["layer"])
+        except Exception:
+            folium_html = None
+
+        update("Uploading assets to Cloud Storage…")
+        uris = _upload_job_assets(
+            job_id, meta["layer"], figure_b64, folium_html,
+            prob, binary, profile, None,
+        )
+
+        update("Storing vectors in BigQuery…")
+        _insert_bq(gdf, job_id, method, name, meta["layer"], uris)
 
         jobs[job_id].update({
             "status":      "done",
@@ -456,6 +628,7 @@ def run_job(
             },
             "description": None,
             "backend":     None,
+            "gcs_uris":    uris,
         })
 
     except Exception as exc:

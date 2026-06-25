@@ -1,29 +1,18 @@
-Backend: rule_based
+Backend: llava
 Source method: method_01_index
 ============================================================
 
-[Rule-based description — no VLM available]
-Source method: method_01_index
-
 1. CHANGE TYPE:
-   reflectance decreased across all visible bands — consistent with water-body expansion, flooding, or deep-shadow increase
+The image shows a change in vegetation cover. The red areas in the right panel indicate a decrease in vegetation cover, which is likely due to deforestation or land-use change.
 
 2. SPATIAL EXTENT:
-   7.7% of the scene (204,574 / 2,671,781 pixels) is flagged as changed.
+The affected area is dispersed and not concentrated in one specific location. The red areas are scattered throughout the image, suggesting that the change is not confined to a single site but rather spread out across the landscape.
 
 3. CHANGE PATTERN:
-   3819 spatially distinct changed region(s) detected.
-   Pattern is fragmented — the largest cluster accounts for 3% of all
-   changed area.  Changes are concentrated in the central portion of the scene.
+The change pattern is irregular and does not follow a specific geometric shape. The red areas are of various sizes and are not aligned in any particular direction.
 
 4. LIKELY CAUSE:
-   Based on visible-band spectral signatures only:
-   Reflectance decreased across all visible bands — consistent with water-body expansion, flooding, or deep-shadow increase
-   A definitive attribution requires NIR/SWIR bands or contextual ground truth.
+The most plausible cause of the change is deforestation or land-use change, as indicated by the decrease in vegetation cover. The red areas in the right panel correspond to the loss of green vegetation in the middle panel, which is consistent with deforestation or the conversion of natural land cover to other uses such as agriculture, infrastructure development, or urbanization.
 
 5. CONFIDENCE:
-   LOW — this description is derived purely from pixel statistics and simple
-   spectral heuristics, without a trained language or vision model.  It should
-   be treated as a first-pass screening aid, not an authoritative interpretation.
-   Spectral change in changed pixels: ΔBlue=-0.026, ΔGreen=-0.032, ΔRed=-0.041.
-Spectral interpretation: reflectance decreased across all visible bands — consistent with water-body expansion, flooding, or deep-shadow increase.
+Based on the visible-band imagery, the confidence level in this analysis is moderate. The red areas in the right panel clearly indicate a change in vegetation cover, but without additional information such as NIR or SWIR bands, it is not possible to definitively determine the cause of the change. The presence of red areas in the right panel suggests that there has been a significant alteration in the landscape, but the exact cause remains uncertain.

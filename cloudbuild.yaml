@@ -65,11 +65,15 @@ steps:
       - --max-instances=3
       # Secrets are mounted as env vars at runtime (created by setup.sh)
       - --set-secrets=OPENAI_API_KEY=OPENAI_API_KEY:latest
+      # GCS bucket and BQ dataset injected as plain env vars (not sensitive)
+      - --set-env-vars=GCS_BUCKET=${PROJECT_ID}-scd-outputs,BQ_DATASET=scd_results
 
 # Record pushed images in build history
 images:
   - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${BUILD_ID}
   - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:latest
+
+timeout: 2400s   # 40 min — PyTorch CUDA wheel is ~2.5 GB, needs extra download time
 
 options:
   machineType: E2_HIGHCPU_8    # faster builds for the heavy GDAL/rasterio layer

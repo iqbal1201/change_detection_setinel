@@ -63,6 +63,7 @@ _PROMPT = (
 def _to_uint8_rgb(img: np.ndarray, percentile: int = 2) -> np.ndarray:
     """Convert (H, W, 3) float32 [B, G, R] stack to uint8 RGB."""
     rgb = img[:, :, [2, 1, 0]].copy().astype(np.float32)
+    np.nan_to_num(rgb, nan=0.0, copy=False)
     lo = np.percentile(rgb, percentile)
     hi = np.percentile(rgb, 100 - percentile)
     rgb = np.clip((rgb - lo) / (hi - lo + 1e-8), 0, 1)
@@ -79,6 +80,14 @@ def _make_panel_image(
     Build a three-panel RGB image: [Before | After | Change overlay].
     Saved as a PIL Image so it can be base64-encoded or passed to a local model.
     """
+    # Downsample large Sentinel-2 tiles before building the panel to avoid OOM
+    h, w = img1.shape[:2]
+    step = max(1, max(h, w) // 1024)
+    if step > 1:
+        img1   = img1  [::step, ::step]
+        img2   = img2  [::step, ::step]
+        binary = binary[::step, ::step]
+
     rgb1 = _to_uint8_rgb(img1)
     rgb2 = _to_uint8_rgb(img2)
 
@@ -146,11 +155,14 @@ def _describe_anthropic(panel_image: Image.Image) -> str:
 def _describe_openai(panel_image: Image.Image) -> str:
     import openai  # pip install openai
 
-    client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    client = openai.OpenAI(
+        api_key=os.environ["OPENAI_API_KEY"],
+        timeout=20.0,   # fail fast if network is blocked — avoids long hang
+    )
     img_b64 = _encode_image(panel_image)
 
     resp = client.chat.completions.create(
-        model="gpt-4o",
+        model="gpt-4o-mini",
         max_tokens=1024,
         messages=[{
             "role": "user",
@@ -249,7 +261,7 @@ def _describe_rule_based(
     # ── Spatial clustering ──────────────────────────────────────────────────
     labeled, n_clusters = label(binary)
     if n_clusters > 0 and changed_px > 0:
-        sizes = np.array([(labeled == i).sum() for i in range(1, n_clusters + 1)])
+        sizes = np.bincount(labeled.ravel())[1:]  # skip background (label 0)
         largest_pct = 100.0 * sizes.max() / changed_px
         compactness = "compact" if largest_pct > 60 else "fragmented"
     else:
@@ -310,8 +322,7 @@ def _describe_rule_based(
     else:
         spectral_line = "No changed pixels detected — spectral analysis not applicable."
 
-    description = f"""[Rule-based description — no VLM available]
-Source method: {source_method}
+    description = f"""Rule-based spectral analysis  (source: {source_method})
 
 1. CHANGE TYPE:
    {spectral_hint if changed_px > 0 else "No change detected."}
@@ -369,10 +380,10 @@ def describe(
 
     backends = []
     if mode == "auto":
-        if os.environ.get("OPENAI_API_KEY"):
-            backends.append(("openai",    lambda: _describe_openai(panel)))
-        backends.append(("llava",       lambda: _describe_llava(panel)))
-        backends.append(("rule_based",  lambda: _describe_rule_based(img1, img2, binary, source_method)))
+        _oai_key = os.environ.get("OPENAI_API_KEY", "")
+        if _oai_key and _oai_key != "placeholder":
+            backends.append(("openai",   lambda: _describe_openai(panel)))
+        backends.append(("rule_based", lambda: _describe_rule_based(img1, img2, binary, source_method)))
     elif mode == "anthropic":
         backends = [("anthropic", lambda: _describe_anthropic(panel))]
     elif mode == "openai":

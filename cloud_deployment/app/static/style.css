@@ -507,6 +507,39 @@ body {
   border: none;
 }
 
+/* ── Stored Assets ───────────────────────────────────────────── */
+.assets-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.asset-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.asset-icon { font-size: 1.1rem; flex-shrink: 0; padding-top: 1px; }
+
+.asset-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 3px;
+}
+
+.asset-uri {
+  font-family: "SF Mono", "Consolas", monospace;
+  font-size: 0.75rem;
+  color: var(--muted);
+  word-break: break-all;
+}
+
 /* ── Utilities ───────────────────────────────────────────────── */
 .hidden { display: none !important; }
 

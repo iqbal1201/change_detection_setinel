@@ -100,6 +100,74 @@
     {% endif %}
     {% endif %}
 
+    <!-- ── Stored Assets ────────────────────────────────────────── -->
+    {% if job.gcs_uris %}
+    <section class="card">
+      <div class="card-header">
+        <h2>Stored Assets</h2>
+        <span style="margin-left:auto; font-size:0.78rem; color:var(--muted);">
+          Cloud Storage &amp; BigQuery
+        </span>
+      </div>
+      <div class="assets-grid">
+        {% if job.gcs_uris.figure %}
+        <div class="asset-row">
+          <span class="asset-icon">🖼</span>
+          <div>
+            <div class="asset-label">Change Figure (PNG)</div>
+            <code class="asset-uri">{{ job.gcs_uris.figure }}</code>
+          </div>
+        </div>
+        {% endif %}
+        {% if job.gcs_uris.prob %}
+        <div class="asset-row">
+          <span class="asset-icon">📡</span>
+          <div>
+            <div class="asset-label">Probability Raster</div>
+            <code class="asset-uri">{{ job.gcs_uris.prob }}</code>
+          </div>
+        </div>
+        {% endif %}
+        {% if job.gcs_uris.binary %}
+        <div class="asset-row">
+          <span class="asset-icon">🗺</span>
+          <div>
+            <div class="asset-label">Binary Change Raster</div>
+            <code class="asset-uri">{{ job.gcs_uris.binary }}</code>
+          </div>
+        </div>
+        {% endif %}
+        {% if job.gcs_uris.map %}
+        <div class="asset-row">
+          <span class="asset-icon">🌐</span>
+          <div>
+            <div class="asset-label">Interactive Map (HTML)</div>
+            <code class="asset-uri">{{ job.gcs_uris.map }}</code>
+          </div>
+        </div>
+        {% endif %}
+        {% if job.gcs_uris.vlm %}
+        <div class="asset-row">
+          <span class="asset-icon">📝</span>
+          <div>
+            <div class="asset-label">VLM Description (TXT)</div>
+            <code class="asset-uri">{{ job.gcs_uris.vlm }}</code>
+          </div>
+        </div>
+        {% endif %}
+        {% if job.stats and job.stats.n_polygons > 0 %}
+        <div class="asset-row">
+          <span class="asset-icon">🗄</span>
+          <div>
+            <div class="asset-label">Vector Polygons → BigQuery</div>
+            <code class="asset-uri">scd_results.change_polygons  ({{ job.stats.n_polygons }} rows, job_id = {{ job_id }})</code>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+    </section>
+    {% endif %}
+
     <!-- ── Job Info ───────────────────────────────────────────── -->
     <section class="card" style="margin-top:0.5rem;">
       <details>

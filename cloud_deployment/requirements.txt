@@ -22,11 +22,16 @@ matplotlib==3.9.2
 folium==0.17.0
 Pillow==10.4.0
 
+# GCP client libraries
+google-cloud-storage>=2.18.0
+google-cloud-bigquery>=3.25.0
+
 # VLM backends (optional — only needed if using Method 6 with API keys)
 anthropic>=0.34.0
 openai>=1.45.0
 
-# Deep learning methods (4a, 4b, 5) — install separately in GPU image:
-# torch torchvision --index-url https://download.pytorch.org/whl/cu124
-# transformers
-# git+https://github.com/facebookresearch/sam2.git
+# Deep learning methods (4a DINOv2, 4b SAM2, 5 DCVA)
+# torch + torchvision are installed in the Dockerfile directly (CUDA index-url).
+transformers==4.44.2
+accelerate==0.34.2
+sam2

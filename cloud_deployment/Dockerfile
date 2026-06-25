@@ -23,7 +23,14 @@ ENV GDAL_VERSION=3.6.4 \
 
 WORKDIR /app
 
-# Stage 2: Install Python deps (cached layer)
+# Stage 2a: PyTorch CUDA — installed separately so the index-url is explicit
+# and this heavy layer (~2.5 GB) is cached independently of other deps.
+RUN pip install --no-cache-dir \
+    torch==2.4.1+cu124 \
+    torchvision==0.19.1+cu124 \
+    --index-url https://download.pytorch.org/whl/cu124
+
+# Stage 2b: Remaining Python deps (lighter packages from PyPI)
 COPY cloud_deployment/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 

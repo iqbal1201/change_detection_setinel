@@ -17,6 +17,9 @@ REPO="scd-images"
 SERVICE="scd-app"
 RUN_SA_NAME="scd-run-sa"
 RUN_SA="${RUN_SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
+GCS_BUCKET="${PROJECT_ID}-scd-outputs"
+BQ_DATASET="scd_results"
+BQ_TABLE="change_polygons"
 
 echo "==> Project : $PROJECT_ID"
 echo "==> Region  : $REGION"
@@ -34,6 +37,8 @@ gcloud services enable \
   artifactregistry.googleapis.com \
   cloudbuild.googleapis.com \
   secretmanager.googleapis.com \
+  storage.googleapis.com \
+  bigquery.googleapis.com \
   iam.googleapis.com
 
 # ── 2. Create Artifact Registry repository ────────────────────────────────────
@@ -75,7 +80,49 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --member="serviceAccount:${RUN_SA}" \
   --role="roles/secretmanager.secretAccessor"
 
-# ── 6. Create API key secrets ─────────────────────────────────────────────────
+# ── 6. Create GCS output bucket ───────────────────────────────────────────────
+echo "==> Creating GCS bucket: gs://${GCS_BUCKET}..."
+gsutil mb -p "$PROJECT_ID" -l "$REGION" -b on "gs://${GCS_BUCKET}" \
+  2>/dev/null || echo "    (bucket may already exist — skipping)"
+
+# Uniform bucket-level access; no public access
+gsutil uniformbucketlevelaccess set on "gs://${GCS_BUCKET}" 2>/dev/null || true
+gsutil pap set enforced "gs://${GCS_BUCKET}" 2>/dev/null || true
+
+# Runtime SA: write / read objects
+gsutil iam ch "serviceAccount:${RUN_SA}:roles/storage.objectAdmin" \
+  "gs://${GCS_BUCKET}"
+
+# ── 7. Create BigQuery dataset and table ──────────────────────────────────────
+echo "==> Creating BigQuery dataset: ${BQ_DATASET}..."
+bq --project_id="$PROJECT_ID" mk \
+  --dataset \
+  --location="$REGION" \
+  --description="Satellite Change Detection polygon results" \
+  "${PROJECT_ID}:${BQ_DATASET}" \
+  2>/dev/null || echo "    (dataset may already exist — skipping)"
+
+echo "==> Creating BigQuery table: ${BQ_TABLE}..."
+bq --project_id="$PROJECT_ID" mk \
+  --table \
+  --description="Change detection polygons from Cloud Run jobs" \
+  --time_partitioning_field=run_at \
+  --time_partitioning_type=DAY \
+  --clustering_fields=method,job_id \
+  "${PROJECT_ID}:${BQ_DATASET}.${BQ_TABLE}" \
+  "job_id:STRING,run_at:TIMESTAMP,method:STRING,method_name:STRING,method_layer:STRING,polygon_id:INTEGER,geometry:GEOGRAPHY,area_m2:FLOAT,confidence:FLOAT,date_before:STRING,date_after:STRING,gcs_figure_uri:STRING,gcs_prob_uri:STRING,gcs_binary_uri:STRING,gcs_map_uri:STRING" \
+  2>/dev/null || echo "    (table may already exist — skipping)"
+
+# Runtime SA: insert rows + run BQ jobs
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${RUN_SA}" \
+  --role="roles/bigquery.dataEditor"
+
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${RUN_SA}" \
+  --role="roles/bigquery.jobUser"
+
+# ── 8. Create API key secrets ─────────────────────────────────────────────────
 echo "==> Creating Secret Manager secrets (enter API keys or press Enter to skip)..."
 
 create_secret() {
@@ -102,7 +149,7 @@ create_secret() {
 
 create_secret "OPENAI_API_KEY"
 
-# ── 7. Connect Cloud Build to repository ──────────────────────────────────────
+# ── 9. Connect Cloud Build to repository ──────────────────────────────────────
 echo ""
 echo "==> Next steps:"
 echo ""

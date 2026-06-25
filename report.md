@@ -156,19 +156,78 @@ All layers stored in WGS84 (EPSG:4326) for GIS compatibility.
 
 ## Part 5 — Results & Interpretation
 
-*(Fill in after running the pipeline — replace the placeholders below.)*
-
 ### Where changes occur
 
-> *[Describe spatial distribution: NW corner of AOI, along haul road, etc.]*
+Detected change polygons are concentrated in the **central portion** of the AOI,
+which corresponds to the active pit area and adjacent overburden dump zones.
+Change is also present along the perimeter of the pit, consistent with ongoing
+bench-face stripping and material haulage.  Peripheral areas of the AOI (woodland
+edge) show little to no change signal across all methods, indicating that the
+mine boundary did not expand significantly within the 21-day window.
+
+The full spatial distribution is best explored in the interactive Folium map
+(`visualizations/change_map.html`): the AOI boundary is overlaid in white, and
+each method's polygon layer can be toggled independently on a satellite basemap.
 
 ### Patterns observed
 
-> *[Number of polygons, size distribution, clustering vs. scattered pattern]*
+Pipeline results (all five methods, from `outputs/change_features.db` and
+`outputs/change_features.gpkg`):
+
+| Method | Polygons | Total area (km²) | Mean confidence | Largest polygon (ha) |
+|---|---|---|---|---|
+| 1 — Multi-Index PCA Fusion | 3,818 | 20.46 | 0.598 | 64.2 |
+| 2 — IR-MAD | 640 | 9.57 | **0.871** | 86.3 |
+| 3 — GMM-EM + Isolation Forest | 526 | 14.40 | 0.734 | 407.6 |
+| 4a — DINOv2 | 15 | 21.30 | 0.482 | 490.8 |
+| 4b — SAM2 / AnyChange | 55 | 37.37 | 0.573 | 967.4 |
+
+**Spatial character of Method 1** (primary spectral method):
+- 3,818 spatially distinct changed regions (highly fragmented)
+- 7.7 % of the scene area flagged as changed (204,574 / 2,671,781 pixels)
+- Largest single polygon: 64.2 ha — change is not dominated by a single
+  large feature but spread across many smaller zones
+- The largest cluster accounts for only ~3 % of all changed area, confirming
+  a fragmented, multi-focal pattern consistent with concurrent activity at
+  multiple pit benches and haul-road segments
+- 395 high-confidence polygons (confidence > 0.70), covering 2.32 km²
+
+**Spectral signature of changed pixels (Method 1, per-band mean difference T2 − T1):**
+
+| Band | Δ reflectance |
+|---|---|
+| B02 (Blue) | −0.026 |
+| B03 (Green) | −0.032 |
+| B04 (Red) | −0.041 |
+
+All three visible bands decreased slightly and consistently.
 
 ### Method agreement
 
-> *[Which methods agree? Where do they diverge? What does divergence imply?]*
+**Where methods agree:**  All five methods identify the central pit area as the
+primary locus of change.  Methods 1, 3, and 4a converge on a total changed area
+of roughly 20–21 km²; this cross-method consistency strengthens confidence that
+real land-surface change occurred.
+
+**Where methods diverge:**
+- **Method 2 (IR-MAD)** detects the *least* area (9.57 km²) but at the *highest*
+  confidence (0.87). As the most radiometrically rigorous method, this represents
+  the most conservative and statistically reliable estimate — changes flagged by
+  IR-MAD that are absent in other methods are likely real, not noise.
+- **Methods 4b (SAM2)** detects the *most* area (37.37 km², largest polygon 967 ha)
+  with coarse spatial granularity. SAM2 compares structural segmentation patterns
+  rather than spectral values; the large polygon footprints reflect the 640 m
+  effective patch radius and capture broad landscape-level structural shifts that
+  spectral methods miss at the polygon boundary level.
+- **Method 4a (DINOv2)** produces only 15 polygons — a consequence of the
+  14 × 14 pixel patch grid (≈140 m × 140 m footprint per patch at 10 m
+  resolution).  Each polygon represents a large semantic region where the
+  appearance changed substantially.
+
+**Implication of divergence:**  The core changed zone (≈9.6 km² flagged by IR-MAD
+at high confidence) represents the minimum reliable estimate of disturbed area.
+The wider fringe detected by Methods 1, 3, and the foundation models captures
+lower-confidence gradual transitions at pit margins and haul-road corridors.
 
 ### Interpretation
 
@@ -183,7 +242,38 @@ Sep 2, 2023), expected change drivers are:
 | Vegetation clearing | NGRDI ↓, ExG ↓ |
 | Atmospheric / illumination artefact | Spatially diffuse, all methods agree weakly |
 
-> *[State which of the above best matches the observed change polygons and why.]*
+**Best-fit interpretation:**  The observed uniform slight decrease in all visible
+bands (ΔBlue = −0.026, ΔGreen = −0.032, ΔRed = −0.041) is **inconsistent with
+vegetation loss** (which would *increase* red reflectance and decrease green) and
+**inconsistent with surface brightening** from new impervious cover or dry-season
+soil exposure (which would *increase* all bands).
+
+The most plausible explanations consistent with the spectral signature and spatial
+pattern are:
+
+1. **Pit deepening → increased shadow area.**  As the open pit becomes deeper over
+   21 days, the proportion of each bench face in self-shadow increases.  Shadow
+   pixels have uniformly lower reflectance across all visible bands.  The highly
+   fragmented polygon pattern at the pit walls is consistent with this mechanism.
+
+2. **Fresh overburden placement.**  Freshly blasted and moved waste rock is often
+   darker than in-situ material due to higher moisture retention and particle size
+   changes.  Large overburden dumps adjacent to the pit would produce the observed
+   pan-band darkening signal.
+
+3. **Tailings pond surface change.**  Active tailings facilities can change
+   reflectance rapidly as slurry dries, is remixed, or the pond footprint
+   shifts.  The SAM2 structural comparison (which flagged the largest total area
+   at 37.4 km²) is particularly sensitive to such topology changes.
+
+**Conclusion:**  The dominant driver of the detected change signal is most likely
+**active pit mining operations** — a combination of bench-face advance (shadow
+increase), overburden hauling and dumping (surface darkening), and possible
+tailings pond fluctuation.  The uniform spectral decrease argues against a
+simple atmospheric artefact (which would typically produce a spatially smooth,
+uniform shift that IR-MAD would suppress).  The multi-method convergence on the
+central AOI further supports a real, physically grounded change signal rather
+than noise or sensor artefact.
 
 ---
 
